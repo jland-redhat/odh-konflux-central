@@ -53,6 +53,7 @@
     "eval-hub": "opendatahub/odh-eval-hub"
   },
   "eval-hub-contrib": {
+    "odh-eval-hub-inspectai-ci": "opendatahub/odh-eval-hub-inspectai",
     "odh-eval-hub-lighteval-ci": "opendatahub/odh-eval-hub-lighteval"
   },
   "feast": {
