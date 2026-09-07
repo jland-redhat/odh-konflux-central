@@ -28,7 +28,7 @@ spec:
   - name: dockerfile
     value: Dockerfile.workspace
   - name: path-context
-    value: packages/data-registry
+    value: .
   pipelineRef:
     resolver: git
     params:
