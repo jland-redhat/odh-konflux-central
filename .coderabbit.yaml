@@ -1,0 +1,7 @@
+# CodeRabbit: repo-wide review; skip olminstall unit_tests and generated Tekton tasks.
+language: en-US
+reviews:
+  review_status: true
+  path_filters:
+    - "!integration-tests/olminstall/unit_tests/**"
+    - "!integration-tests/olminstall/tekton/tasks/generated/**"

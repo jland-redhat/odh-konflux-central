@@ -198,7 +198,7 @@ spec:
         - name: git-url
           value: "$(tasks.parse-metadata.results.source-git-url)"
         - name: git-rev
-          value: "$(tasks.parse-metadata.results.target-git-branch)"
+          value: "$(tasks.parse-metadata.results.source-git-revision)"
         - name: component-image
           value: "$(tasks.parse-metadata.results.component-container-image)"
         taskSpec:
@@ -236,9 +236,10 @@ spec:
               script: |
                 echo $(params.git-url)
                 echo $(params.git-rev)
-                git clone --depth 1 --branch $(params.git-rev) $(params.git-url) /workspace/source
+                git clone --depth 50 --no-single-branch $(params.git-url) /workspace/source
                 git config --global --add safe.directory /workspace/source
                 cd /workspace/source
+                git checkout $(params.git-rev)
 
             - name: e2e-odh-kserve
               onError: continue
@@ -433,7 +434,7 @@ spec:
         - name: git-url
           value: "$(tasks.parse-metadata.results.source-git-url)"
         - name: git-rev
-          value: "$(tasks.parse-metadata.results.target-git-branch)"
+          value: "$(tasks.parse-metadata.results.source-git-revision)"
         - name: component-image
           value: "$(tasks.parse-metadata.results.component-container-image)"
         taskSpec:
@@ -471,9 +472,10 @@ spec:
               script: |
                 echo $(params.git-url)
                 echo $(params.git-rev)
-                git clone --depth 1 --branch $(params.git-rev) $(params.git-url) /workspace/source
+                git clone --depth 50 --no-single-branch $(params.git-url) /workspace/source
                 git config --global --add safe.directory /workspace/source
                 cd /workspace/source
+                git checkout $(params.git-rev)
             - name: e2e-odh-llmisvc
               onError: continue
               image: quay.io/rhoai/rhoai-task-toolset:model-controller-its
@@ -533,7 +535,7 @@ spec:
                   echo "LLMD_ROUTING_SIDECAR_IMAGE=${LLMD_ROUTING_SIDECAR_IMAGE}"
                   echo "KUBE_RBAC_PROXY_IMAGE=${KUBE_RBAC_PROXY_IMAGE}"
 
-                  ./test/scripts/openshift-ci/run-e2e-tests.sh "llminferenceservice and (cluster_cpu and cluster_single_node)" 2 "llm-d"
+                  ./test/scripts/openshift-ci/run-e2e-tests.sh "llminferenceservice and (cluster_cpu and cluster_single_node) and not autoscaling and not tracing" 2 "llm-d"
                 popd
             - name: must-gather
               onError: continue

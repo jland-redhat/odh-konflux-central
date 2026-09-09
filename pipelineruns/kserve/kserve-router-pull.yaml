@@ -9,13 +9,13 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "release-v0.15"
+      == "$$TARGET_BRANCH$$"
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: opendatahub-builds
     appstudio.openshift.io/component: kserve-router-ci
     pipelines.appstudio.openshift.io/type: build
-  name: kserve-router-on-pull-request
+  name: kserve-router-on-pull
   namespace: open-data-hub-tenant
 spec:
   params:
@@ -24,16 +24,21 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/opendatahub/kserve-router:odh-pr
+    value: quay.io/opendatahub/kserve-router:$$OUTPUT_IMAGE_TAG$$
   - name: dockerfile
     value: router.Dockerfile
   - name: path-context
     value: .
+  - name: build-args
+    value:
+    - "GOTAGS=distro"
   - name: additional-tags
     value:
     - 'odh-pr-{{revision}}'
   - name: pipeline-type
     value: pull-request
+  - name: enable-group-testing
+    value: "true"
   pipelineRef:
     resolver: git
     params:
@@ -43,6 +48,15 @@ spec:
       value: main
     - name: pathInRepo
       value: pipeline/multi-arch-container-build.yaml
+  taskRunSpecs:
+    - pipelineTaskName: sast-shell-check
+      computeResources:
+        requests:
+          cpu: '2'
+          memory: 16Gi
+        limits:
+          cpu: '2'
+          memory: 16Gi
   taskRunTemplate:
     serviceAccountName: build-pipeline-kserve-router
   workspaces:

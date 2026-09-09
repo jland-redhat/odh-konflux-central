@@ -19,6 +19,22 @@ spec:
       - name: BUILD_TYPE
         type: string
         default: "CI"
+      - name: repo-owner
+        type: string
+        default: "opendatahub-io"
+        description: "Owner of the FBC processor repository"
+      - name: repo-name
+        type: string
+        default: "opendatahub-operator"
+        description: "Name of the FBC processor repository"
+      - name: fbc-workflow
+        type: string
+        default: "release-process-fbc-fragment.yaml"
+        description: "GitHub Actions workflow file to trigger"
+      - name: fbc-enabled
+        type: string
+        default: "true"
+        description: "Whether to trigger FBC processing after successful E2E"
     tasks:
       - name: parse-metadata
         taskRef:
@@ -68,9 +84,12 @@ spec:
         params:
           - name: BUILD_TYPE
             value: $(params.BUILD_TYPE)
+          - name: TARGET_BRANCH
+            value: $(tasks.parse-metadata.results.target-git-branch)
         taskSpec:
           params:
           - name: BUILD_TYPE
+          - name: TARGET_BRANCH
           results:
           - name: event-type
             description: "stores info about event type"
@@ -90,6 +109,8 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: metadata.labels['pac.test.appstudio.openshift.io/pull-request']
+              - name: TARGET_BRANCH
+                value: $(params.TARGET_BRANCH)
               - name: BUILD_TYPE
                 value: $(params.BUILD_TYPE)
             script: |
@@ -97,15 +118,23 @@ spec:
               set -e
               echo "EVENT_TYPE=${EVENT_TYPE}"
               echo "PR_NUMBER=${PR_NUMBER}"
+              echo "TARGET_BRANCH=${TARGET_BRANCH}"
               echo "BUILD_TYPE=${BUILD_TYPE}"
               echo -n "${EVENT_TYPE}" > $(results.event-type.path)
               echo -n "${PR_NUMBER}" > $(results.pr-number.path)
 
-              if [ -n "${PR_NUMBER}" ] || [ "${BUILD_TYPE}" = "RELEASE" ]; then
-                echo "Prerequisites met: PR_NUMBER is set or BUILD_TYPE is RELEASE"
+              # Check if target branch matches ODH release pattern (odh-x.y.z or odh-x.y.z-anything)
+              ODH_RELEASE_BRANCH=""
+              if [[ "${TARGET_BRANCH}" =~ ^odh-[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+                ODH_RELEASE_BRANCH="true"
+                echo "Target branch matches ODH release pattern: ${TARGET_BRANCH}"
+              fi
+
+              if [ -n "${PR_NUMBER}" ] || [ "${BUILD_TYPE}" = "Release" ] || [ "${ODH_RELEASE_BRANCH}" = "true" ]; then
+                echo "Prerequisites met: PR_NUMBER is set, BUILD_TYPE is Release, or TARGET_BRANCH matches ODH release pattern"
                 echo -n "true" > $(results.prerequisites-met.path)
               else
-                echo "Prerequisites not met: PR_NUMBER is empty and BUILD_TYPE is not RELEASE"
+                echo "Prerequisites not met: PR_NUMBER is empty, BUILD_TYPE is not Release, and TARGET_BRANCH doesn't match ODH release pattern"
                 echo -n "false" > $(results.prerequisites-met.path)
               fi
 
@@ -242,6 +271,7 @@ spec:
 
             - name: deploy-and-e2e
               image: quay.io/rhoai/rhoai-task-toolset:operator
+              imagePullPolicy: Always
               computeResources:
                 requests:
                   memory: "16Gi"
@@ -254,6 +284,8 @@ spec:
                   value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
                 - name: GOMEMLIMIT
                   value: "10GiB"
+                - name: GOTOOLCHAIN
+                  value: "auto"
               workingDir: /workspace/source
               volumeMounts:
                 - name: credentials
@@ -280,7 +312,7 @@ spec:
 
                 # Run e2e tests
                 echo "Running e2e tests..."
-                make e2e-test -e E2E_TEST_OPERATOR_NAMESPACE=$(params.namespace) || {
+                make e2e-test SKIP_IMAGE_OVERRIDES=1 E2E_TEST_OPERATOR_NAMESPACE=$(params.namespace) || {
                   EXIT_CODE=$?
                   echo "============================================"
                   echo "E2E tests failed with exit code: $EXIT_CODE"
@@ -294,3 +326,82 @@ spec:
           - input: "$(tasks.check-prerequisites.results.prerequisites-met)"
             operator: in
             values: ["true"]
+
+    finally:
+      - name: trigger-fbc-processor
+        when:
+          - input: "$(tasks.status)"
+            operator: in
+            values: ["Succeeded"]
+          - input: "$(params.BUILD_TYPE)"
+            operator: in
+            values: ["Release"]
+          - input: "$(params.fbc-enabled)"
+            operator: in
+            values: ["true"]
+        params:
+          - name: release-branch
+            value: "$(tasks.parse-metadata.results.target-git-branch)"
+          - name: build-commit
+            value: "$(tasks.parse-metadata.results.source-git-revision)"
+          - name: pr-number
+            value: "$(tasks.parse-metadata.results.pull-request-number)"
+          - name: component-image
+            value: "$(tasks.parse-metadata.results.component-container-image)"
+          - name: test-event-type
+            value: "$(tasks.parse-metadata.results.test-event-type)"
+        taskSpec:
+          params:
+            - name: release-branch
+            - name: build-commit
+            - name: pr-number
+            - name: component-image
+            - name: test-event-type
+          steps:
+            - name: trigger-fbc-workflow
+              image: quay.io/rhoai/rhoai-task-toolset:its
+              env:
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: rhods-ci
+                      key: secret
+                - name: FBC_REPO_OWNER
+                  value: "$(params.repo-owner)"
+                - name: FBC_REPO_NAME
+                  value: "$(params.repo-name)"
+                - name: FBC_WORKFLOW_FILE
+                  value: "$(params.fbc-workflow)"
+              script: |
+                #!/bin/bash
+                set -e
+
+                # For Release builds, use the release branch (e.g., odh-3.4.0)
+                TARGET_REF="$(params.release-branch)"
+
+                echo "Triggering FBC processor workflow for successful E2E completion"
+                echo "Repository: $FBC_REPO_OWNER/$FBC_REPO_NAME"
+                echo "Workflow: $FBC_WORKFLOW_FILE"
+                echo "Target ref: $TARGET_REF"
+                echo "Build type: Release"
+                echo "Release branch: $(params.release-branch)"
+                echo "Build commit: $(params.build-commit)"
+
+                # Validate that target ref follows ODH release pattern
+                if [[ ! "$TARGET_REF" =~ ^odh-[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+                  echo "WARNING: Target ref '$TARGET_REF' does not match ODH release pattern (odh-x.y.z)"
+                  echo "FBC processor workflow requires branches starting with 'odh-' and will not run otherwise"
+                  exit 0
+                fi
+
+                curl -f -X POST "https://api.github.com/repos/$FBC_REPO_OWNER/$FBC_REPO_NAME/actions/workflows/$FBC_WORKFLOW_FILE/dispatches" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  -H "Authorization: Bearer $GITHUB_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"ref\": \"$TARGET_REF\"}" || {
+                    echo "WARNING: Failed to trigger FBC processor workflow, but continuing pipeline"
+                    echo "This may be due to network issues or insufficient permissions"
+                    exit 0
+                  }
+
+                echo "FBC processor workflow triggered successfully on branch: $TARGET_REF"

@@ -60,7 +60,7 @@ spec:
   source:
     git:
       dockerfileUrl: Dockerfiles/Dockerfile
-      revision: "stable"
+      revision: "main"
       url: https://github.com/opendatahub-io/opendatahub-operator
 ---
 apiVersion: appstudio.redhat.com/v1alpha1
@@ -1138,8 +1138,65 @@ spec:
   containerImage: quay.io/opendatahub/llm-d-routing-sidecar
   source:
     git:
+      dockerfileUrl: Dockerfile.sidecar
       revision: main
-      url: https://github.com/opendatahub-io/llm-d-routing-sidecar
+      url: https://github.com/opendatahub-io/llm-d-inference-scheduler.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    mintmaker.appstudio.redhat.com/disabled: true
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+  name: llm-d-routing-sidecar-konflux-ci
+spec:
+  application: opendatahub-builds
+  componentName: llm-d-routing-sidecar-konflux-ci
+  containerImage: quay.io/opendatahub/llm-d-routing-sidecar-konflux
+  source:
+    git:
+      dockerfileUrl: Dockerfile.sidecar.konflux
+      revision: main
+      url: https://github.com/opendatahub-io/llm-d-inference-scheduler.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    mintmaker.appstudio.redhat.com/disabled: true
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+  name: llm-d-uds-tokenizer-ci
+spec:
+  application: opendatahub-builds
+  componentName: llm-d-uds-tokenizer-ci
+  containerImage: quay.io/opendatahub/llm-d-uds-tokenizer
+  source:
+    git:
+      context: services/uds_tokenizer
+      dockerfileUrl: Dockerfile
+      revision: main
+      url: https://github.com/opendatahub-io/llm-d-kv-cache
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    mintmaker.appstudio.redhat.com/disabled: true
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+  name: llm-d-uds-tokenizer-konflux-ci
+spec:
+  application: opendatahub-builds
+  componentName: llm-d-uds-tokenizer-konflux-ci
+  containerImage: quay.io/opendatahub/llm-d-uds-tokenizer-konflux
+  source:
+    git:
+      context: services/uds_tokenizer
+      dockerfileUrl: Dockerfile.konflux
+      revision: main
+      url: https://github.com/opendatahub-io/llm-d-kv-cache
 ---
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: Component
@@ -1159,7 +1216,6 @@ spec:
       dockerfileUrl: Dockerfile
       revision: main
       url: https://github.com/opendatahub-io/llama-stack-k8s-operator
-
 ---
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: Component
@@ -1252,6 +1308,25 @@ spec:
     git:
       context: .
       dockerfileUrl: packages/gen-ai/Dockerfile.workspace
+      revision: "main"
+      url: https://github.com/opendatahub-io/odh-dashboard
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    mintmaker.appstudio.redhat.com/disabled: true
+  name: odh-mod-arch-agent-ops-ci
+spec:
+  application: opendatahub-builds
+  componentName: odh-mod-arch-agent-ops-ci
+  containerImage: quay.io/opendatahub/odh-mod-arch-agent-ops
+  source:
+    git:
+      context: .
+      dockerfileUrl: packages/agent-ops/Dockerfile.workspace
       revision: "main"
       url: https://github.com/opendatahub-io/odh-dashboard
 ---
@@ -1438,6 +1513,26 @@ metadata:
     build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
     build.appstudio.openshift.io/request: configure-pac-no-mr
     mintmaker.appstudio.redhat.com/disabled: "true"
+  name: odh-training-cuda130-torch210-py312-openmpi41-ci
+  namespace: open-data-hub-tenant
+spec:
+  application: opendatahub-builds
+  componentName: odh-training-cuda130-torch210-py312-openmpi41-ci
+  containerImage: quay.io/opendatahub/odh-training-cuda130-torch210-py312-openmpi41
+  source:
+    git:
+      context: images/runtime/training/py312-cuda130-torch210-openmpi41
+      dockerfileUrl: Dockerfile
+      revision: stable
+      url: https://github.com/opendatahub-io/distributed-workloads.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+    mintmaker.appstudio.redhat.com/disabled: "true"
   name: odh-pipeline-runtime-pytorch-llmcompressor-cuda-py312-ci
   namespace: open-data-hub-tenant
 spec:
@@ -1516,25 +1611,6 @@ metadata:
     build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
     mintmaker.appstudio.redhat.com/disabled: true
     build.appstudio.openshift.io/request: configure-pac-no-mr
-  name: odh-llama-stack-core-ci
-spec:
-  application: opendatahub-builds
-  componentName: odh-llama-stack-core-ci
-  containerImage: quay.io/opendatahub/llama-stack
-  source:
-    git:
-      context: .
-      dockerfileUrl: distribution/Containerfile
-      revision: main
-      url: https://github.com/opendatahub-io/llama-stack-distribution.git
----
-apiVersion: appstudio.redhat.com/v1alpha1
-kind: Component
-metadata:
-  annotations:
-    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
-    mintmaker.appstudio.redhat.com/disabled: true
-    build.appstudio.openshift.io/request: configure-pac-no-mr
   name: odh-maas-api-ci
 spec:
   application: opendatahub-builds
@@ -1546,3 +1622,62 @@ spec:
       dockerfileUrl: maas-api/Dockerfile
       revision: main
       url: https://github.com/opendatahub-io/models-as-a-service.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    mintmaker.appstudio.redhat.com/disabled: true
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+  name: odh-maas-controller-ci
+spec:
+  application: opendatahub-builds
+  componentName: odh-maas-controller-ci
+  containerImage: quay.io/opendatahub/maas-controller
+  source:
+    git:
+      context: maas-controller
+      dockerfileUrl: Dockerfile
+      revision: main
+      url: https://github.com/opendatahub-io/models-as-a-service.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    mintmaker.appstudio.redhat.com/disabled: "true"
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+  name: odh-ai-gateway-payload-processing-ci
+  namespace: open-data-hub-tenant
+spec:
+  application: opendatahub-builds
+  componentName: odh-ai-gateway-payload-processing-ci
+  containerImage: quay.io/opendatahub/odh-ai-gateway-payload-processing
+  source:
+    git:
+      context: .
+      dockerfileUrl: Dockerfile
+      revision: main
+      url: https://github.com/opendatahub-io/ai-gateway-payload-processing.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-multi-platform-oci-ta","bundle":"latest"}'
+    mintmaker.appstudio.redhat.com/disabled: "true"
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+  name: ai-gateway-payload-processing-e2e-ci
+  namespace: open-data-hub-tenant
+spec:
+  application: opendatahub-builds
+  componentName: ai-gateway-payload-processing-e2e-ci
+  containerImage: quay.io/opendatahub/ai-gateway-payload-processing-e2e
+  source:
+    git:
+      context: .
+      dockerfileUrl: Dockerfile.e2e
+      revision: main
+      url: https://github.com/opendatahub-io/ai-gateway-payload-processing.git

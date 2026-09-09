@@ -180,6 +180,8 @@ spec:
         volumes:
           - name: credentials
             emptyDir: {}
+          - name: test-status
+            emptyDir: {}
         workspaces:
           - name: basic-auth
             optional: true
@@ -204,16 +206,38 @@ spec:
           - name: deploy-and-e2e
             image: quay.io/rhoai/rhoai-task-toolset:go-its
             onError: continue
+            computeResources:
+              requests:
+                memory: "4Gi"
+                cpu: "2"
+              limits:
+                memory: "8Gi"
+                cpu: "4"
             env:
               - name: KUBECONFIG
                 value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
               - name: SNAPSHOT
                 value: $(tasks.generate-snapshot.results.SNAPSHOT)
+              - name: GOTOOLCHAIN
+                value: auto
             workingDir: /workspace/source
             volumeMounts:
               - name: credentials
                 mountPath: /credentials
+              - name: test-status
+                mountPath: /test-status
             script: |
+              STATUS_FILE="/test-status/deploy-and-e2e-status"
+              echo "failed" > "$STATUS_FILE"
+
+              # Configure KUBECONFIG for Registry REST API tests
+              export KUBECONFIG
+              echo "KUBECONFIG=${KUBECONFIG}"
+              export HOME="${HOME:-/tmp}"
+              mkdir -p "$HOME/.kube"
+              cp "${KUBECONFIG%%:*}" "$HOME/.kube/config"
+              echo "Kubeconfig copied to $HOME/.kube/config"
+
               oc get pods
               oc whoami
 
@@ -244,17 +268,48 @@ spec:
               git checkout ${REVISION}
 
               export RUN_ON_OPENSHIFT_CI=true
+              echo "Feature Store Operator E2E test run"
               cd infra/feast-operator
               make install && make deploy IMG=${FEAST_OPERATOR_CONTROLLER_IMAGE} FS_IMG=${FEAST_FEATURE_SERVER_IMAGE}
               oc wait --for condition=Available -n feast-operator-system deployment feast-operator-controller-manager
-              make test-e2e
-              make undeploy IMG=${FEAST_OPERATOR_CONTROLLER_IMAGE} FS_IMG=${FEAST_FEATURE_SERVER_IMAGE}
+              
+              E2E_RC=0
+              REGISTRY_RC=0
+              PREV_RC=0
+              UPGRADE_RC=0
 
-              make test-previous-version
-              oc delete deployment feast-operator-controller-manager -n feast-operator-system
+              echo "=== Running: make test-e2e ==="
+              make test-e2e || E2E_RC=$?
 
-              make test-upgrade
+              cd ../..
+              echo "=== Running: registry REST API test ==="
+              make install-python-dependencies-ci && \
+              uv run pytest -c sdk/python/pytest.ini sdk/python/tests/integration/rest_api/test_registry_rest_api.py --integration -s --timeout=600 || REGISTRY_RC=$?
 
+              cd infra/feast-operator
+              make undeploy IMG=${FEAST_OPERATOR_CONTROLLER_IMAGE} FS_IMG=${FEAST_FEATURE_SERVER_IMAGE} || true
+
+              echo "=== Running: make test-previous-version ==="
+              make test-previous-version || PREV_RC=$?
+
+              oc delete deployment feast-operator-controller-manager -n feast-operator-system --ignore-not-found=true
+              oc wait --for=delete deployment/feast-operator-controller-manager -n feast-operator-system --timeout=180s || UPGRADE_RC=$?
+
+              echo "=== Running: make test-upgrade ==="
+              make test-upgrade || UPGRADE_RC=$?
+
+              echo ""
+              echo "=== Test Suite Results ==="
+              echo "  test-e2e:              $([ $E2E_RC      -eq 0 ] && echo PASSED || echo FAILED [rc=$E2E_RC])"
+              echo "  registry-rest-api:     $([ $REGISTRY_RC -eq 0 ] && echo PASSED || echo FAILED [rc=$REGISTRY_RC])"
+              echo "  test-previous-version: $([ $PREV_RC     -eq 0 ] && echo PASSED || echo FAILED [rc=$PREV_RC])"
+              echo "  test-upgrade:          $([ $UPGRADE_RC  -eq 0 ] && echo PASSED || echo FAILED [rc=$UPGRADE_RC])"
+
+              if [ $E2E_RC -eq 0 ] && [ $REGISTRY_RC -eq 0 ] && [ $PREV_RC -eq 0 ] && [ $UPGRADE_RC -eq 0 ]; then
+                echo "success" > "$STATUS_FILE"
+              else
+                exit 1
+              fi
           - name: must-gather
             onError: continue
             image: quay.io/rhoai/rhoai-task-toolset:go-its
@@ -299,7 +354,18 @@ spec:
               - name: pipelinerun-name
                 value: $(context.pipelineRun.name)
 
-
+          - name: fail-if-needed
+            image: alpine
+            volumeMounts:
+              - name: test-status
+                mountPath: /test-status
+            script: |
+              STATUS_FILE="/test-status/deploy-and-e2e-status"
+              if ! [ -f "$STATUS_FILE" ] || [ "$(cat "$STATUS_FILE")" != "success" ]; then
+                echo "Failing pipeline because deploy-and-e2e step failed"
+                exit 1
+              fi
+              echo "deploy-and-e2e step succeeded"
 
   finally:
   - name: push-ci-artifacts-and-update-pr

@@ -101,11 +101,11 @@ spec:
               echo -n "${EVENT_TYPE}" > $(results.event-type.path)
               echo -n "${PR_NUMBER}" > $(results.pr-number.path)
 
-              if [ -n "${PR_NUMBER}" ] || [ "${BUILD_TYPE}" = "RELEASE" ]; then
-                echo "Prerequisites met: PR_NUMBER is set or BUILD_TYPE is RELEASE"
+              if [ -n "${PR_NUMBER}" ] || [ "${BUILD_TYPE}" = "Release" ]; then
+                echo "Prerequisites met: PR_NUMBER is set or BUILD_TYPE is Release"
                 echo -n "true" > $(results.prerequisites-met.path)
               else
-                echo "Prerequisites not met: PR_NUMBER is empty and BUILD_TYPE is not RELEASE"
+                echo "Prerequisites not met: PR_NUMBER is empty and BUILD_TYPE is not Release"
                 echo -n "false" > $(results.prerequisites-met.path)
               fi
 
@@ -241,6 +241,7 @@ spec:
 
             - name: deploy-and-e2e
               image: quay.io/rhoai/rhoai-task-toolset:operator
+              imagePullPolicy: Always
               computeResources:
                 requests:
                   memory: "16Gi"
@@ -253,6 +254,8 @@ spec:
                   value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
                 - name: GOMEMLIMIT
                   value: "10GiB"
+                - name: GOTOOLCHAIN
+                  value: "auto"
               workingDir: /workspace/source
               volumeMounts:
                 - name: credentials

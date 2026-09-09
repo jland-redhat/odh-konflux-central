@@ -182,7 +182,7 @@ spec:
       - name: name
         value: prefetch-dependencies-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.2@sha256:3fa0204a481044b21f0e784ce39cbd25e8fb49c664a5458f3eef351fff1c906e
+        value: quay.io/konflux-ci/tekton-catalog/task-prefetch-dependencies-oci-ta:0.7.1@sha256:8ca8782a577540eaf9e0190063846960bd1bd6066d49e8b86bfde83dae108a0d
       - name: kind
         value: task
       resolver: bundles
@@ -238,7 +238,7 @@ spec:
 #      - name: name
 #        value: buildah-remote-oci-ta
 #      - name: bundle
-#        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.7@sha256:ef1c062b10c9fb17951350de76bce6bb54a4ea75fca4f37ea136d626c444bf78
+#        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.10.5@sha256:eb277ec7b44443f0506a60ac940a2e52178d60f17cb0f51a6966daed5b3755de
 #      - name: kind
 #        value: task
 #      resolver: bundles
@@ -294,7 +294,7 @@ spec:
       - name: name
         value: buildah-remote-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.7@sha256:ef1c062b10c9fb17951350de76bce6bb54a4ea75fca4f37ea136d626c444bf78
+        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.10.5@sha256:eb277ec7b44443f0506a60ac940a2e52178d60f17cb0f51a6966daed5b3755de
       - name: kind
         value: task
       resolver: bundles
@@ -350,7 +350,7 @@ spec:
       - name: name
         value: buildah-remote-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.7@sha256:ef1c062b10c9fb17951350de76bce6bb54a4ea75fca4f37ea136d626c444bf78
+        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.10.5@sha256:eb277ec7b44443f0506a60ac940a2e52178d60f17cb0f51a6966daed5b3755de
       - name: kind
         value: task
       resolver: bundles
@@ -406,7 +406,7 @@ spec:
       - name: name
         value: buildah-remote-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.7@sha256:ef1c062b10c9fb17951350de76bce6bb54a4ea75fca4f37ea136d626c444bf78
+        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.10.5@sha256:eb277ec7b44443f0506a60ac940a2e52178d60f17cb0f51a6966daed5b3755de
       - name: kind
         value: task
       resolver: bundles
@@ -462,7 +462,7 @@ spec:
       - name: name
         value: buildah-remote-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.7@sha256:ef1c062b10c9fb17951350de76bce6bb54a4ea75fca4f37ea136d626c444bf78
+        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.10.5@sha256:eb277ec7b44443f0506a60ac940a2e52178d60f17cb0f51a6966daed5b3755de
       - name: kind
         value: task
       resolver: bundles
@@ -518,7 +518,7 @@ spec:
       - name: name
         value: buildah-remote-oci-ta
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.7@sha256:ef1c062b10c9fb17951350de76bce6bb54a4ea75fca4f37ea136d626c444bf78
+        value: quay.io/konflux-ci/tekton-catalog/task-buildah-remote-oci-ta:0.10.5@sha256:eb277ec7b44443f0506a60ac940a2e52178d60f17cb0f51a6966daed5b3755de
       - name: kind
         value: task
       resolver: bundles
@@ -752,6 +752,8 @@ spec:
       volumes:
           - name: credentials
             emptyDir: {}
+          - name: test-status
+            emptyDir: {}
       steps:
         - name: get-kubeconfig
           ref:
@@ -810,11 +812,13 @@ spec:
             - name: ERROR_404_ISVC_IMAGE
               value: quay.io/opendatahub/error-404-isvc:$(tasks.rhoai-init.results.mandatory-tag) #$(tasks.build-error-404-isvc.results.IMAGE_REF)
             - name: ARTIFACT_DIR
-              value: /workspace/artifact-dir
+              value: /workspace/artifacts-dir
           workingDir: /workspace/source
           volumeMounts:
             - name: credentials
               mountPath: /credentials
+            - name: test-status
+              mountPath: /test-status
           script: |
             set -euxo pipefail
             # apk add --no-cache bash make git curl \
@@ -822,7 +826,8 @@ spec:
             # && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
             # && rm kubectl && bash
             bash
-
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            echo "failed" > "$STATUS_FILE"
             COMPONENT_NAME=kserve-agent-ci
             export KSERVE_AGENT_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
@@ -836,8 +841,9 @@ spec:
             export STORAGE_INITIALIZER_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
             export GITHUB_SHA=stable
-            ./test/scripts/openshift-ci/run-e2e-tests.sh graph 2 raw
+            make e2e-graph-ocp E2E_PARALLELISM=2 RUNNING_LOCAL=false
 
+            echo "success" > "$STATUS_FILE"
         - name: must-gather
           onError: continue
           image: quay.io/rhoai/rhoai-task-toolset:go-its
@@ -861,6 +867,7 @@ spec:
             mkdir -p ${DEST_DIR}
             oc adm must-gather --dest-dir "${DEST_DIR}"
         - name: git-push-artifacts
+          onError: continue
           ref:
             resolver: git
             params:
@@ -883,7 +890,18 @@ spec:
               value: 'test-artifacts/$(context.pipelineRun.name)'
             - name: pipelinerun-name
               value: $(context.pipelineRun.name)
-
+        - name: fail-if-needed
+          image: alpine
+          volumeMounts:
+            - name: test-status
+              mountPath: /test-status
+          script: |
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            if ! [ -f "$STATUS_FILE" ] || [ "$(cat "$STATUS_FILE")" != "success" ]; then
+              echo "Failing pipeline because deploy-and-e2e step failed"
+              exit 1
+            fi
+            echo "deploy-and-e2e step succeeded"
 
 
   - name: provision-eaas-space-raw
@@ -973,6 +991,8 @@ spec:
       volumes:
           - name: credentials
             emptyDir: {}
+          - name: test-status
+            emptyDir: {}
       steps:
         - name: get-kubeconfig
           ref:
@@ -1031,11 +1051,13 @@ spec:
             - name: ERROR_404_ISVC_IMAGE
               value: quay.io/opendatahub/error-404-isvc:$(tasks.rhoai-init.results.mandatory-tag) #$(tasks.build-error-404-isvc.results.IMAGE_REF)
             - name: ARTIFACT_DIR
-              value: /workspace/artifact-dir
+              value: /workspace/artifacts-dir
           workingDir: /workspace/source
           volumeMounts:
             - name: credentials
               mountPath: /credentials
+            - name: test-status
+              mountPath: /test-status
           script: |
             set -euxo pipefail
             # apk add --no-cache bash make git curl \
@@ -1043,7 +1065,8 @@ spec:
             # && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
             # && rm kubectl && bash
             bash
-
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            echo "failed" > "$STATUS_FILE"
             COMPONENT_NAME=kserve-agent-ci
             export KSERVE_AGENT_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
@@ -1056,8 +1079,8 @@ spec:
             COMPONENT_NAME=kserve-storage-initializer-ci
             export STORAGE_INITIALIZER_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
-            ./test/scripts/openshift-ci/run-e2e-tests.sh raw
-
+            make e2e-raw-ocp E2E_PARALLELISM=2 RUNNING_LOCAL=false
+            echo "success" > "$STATUS_FILE"
         - name: must-gather
           onError: continue
           image: quay.io/rhoai/rhoai-task-toolset:go-its
@@ -1081,6 +1104,7 @@ spec:
             mkdir -p ${DEST_DIR}
             oc adm must-gather --dest-dir "${DEST_DIR}"
         - name: git-push-artifacts
+          onError: continue
           ref:
             resolver: git
             params:
@@ -1103,7 +1127,18 @@ spec:
               value: 'test-artifacts/$(context.pipelineRun.name)'
             - name: pipelinerun-name
               value: $(context.pipelineRun.name)
-
+        - name: fail-if-needed
+          image: alpine
+          volumeMounts:
+            - name: test-status
+              mountPath: /test-status
+          script: |
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            if ! [ -f "$STATUS_FILE" ] || [ "$(cat "$STATUS_FILE")" != "success" ]; then
+              echo "Failing pipeline because deploy-and-e2e step failed"
+              exit 1
+            fi
+            echo "deploy-and-e2e step succeeded"
 
   - name: provision-eaas-space-predictor
     runAfter:
@@ -1192,6 +1227,8 @@ spec:
       volumes:
           - name: credentials
             emptyDir: {}
+          - name: test-status
+            emptyDir: {}
       steps:
         - name: get-kubeconfig
           ref:
@@ -1250,11 +1287,13 @@ spec:
             - name: ERROR_404_ISVC_IMAGE
               value: quay.io/opendatahub/error-404-isvc:$(tasks.rhoai-init.results.mandatory-tag) #$(tasks.build-error-404-isvc.results.IMAGE_REF)
             - name: ARTIFACT_DIR
-              value: /workspace/artifact-dir
+              value: /workspace/artifacts-dir
           workingDir: /workspace/source
           volumeMounts:
             - name: credentials
               mountPath: /credentials
+            - name: test-status
+              mountPath: /test-status
           script: |
             set -euxo pipefail
             # apk add --no-cache bash make git curl \
@@ -1262,7 +1301,8 @@ spec:
             # && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
             # && rm kubectl && bash
             bash
-
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            echo "failed" > "$STATUS_FILE"
             COMPONENT_NAME=kserve-agent-ci
             export KSERVE_AGENT_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
@@ -1275,8 +1315,8 @@ spec:
             COMPONENT_NAME=kserve-storage-initializer-ci
             export STORAGE_INITIALIZER_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
-            ./test/scripts/openshift-ci/run-e2e-tests.sh "predictor or kserve_on_openshift"
-
+            make e2e-predictor-ocp E2E_PARALLELISM=2 RUNNING_LOCAL=false
+            echo "success" > "$STATUS_FILE"
         - name: must-gather
           onError: continue
           image: quay.io/rhoai/rhoai-task-toolset:go-its
@@ -1300,6 +1340,7 @@ spec:
             mkdir -p ${DEST_DIR}
             oc adm must-gather --dest-dir "${DEST_DIR}"
         - name: git-push-artifacts
+          onError: continue
           ref:
             resolver: git
             params:
@@ -1322,7 +1363,18 @@ spec:
               value: 'test-artifacts/$(context.pipelineRun.name)'
             - name: pipelinerun-name
               value: $(context.pipelineRun.name)
-
+        - name: fail-if-needed
+          image: alpine
+          volumeMounts:
+            - name: test-status
+              mountPath: /test-status
+          script: |
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            if ! [ -f "$STATUS_FILE" ] || [ "$(cat "$STATUS_FILE")" != "success" ]; then
+              echo "Failing pipeline because deploy-and-e2e step failed"
+              exit 1
+            fi
+            echo "deploy-and-e2e step succeeded"
 
 
   - name: provision-eaas-space-llm-inference-service
@@ -1412,6 +1464,8 @@ spec:
       volumes:
           - name: credentials
             emptyDir: {}
+          - name: test-status
+            emptyDir: {}
       steps:
         - name: get-kubeconfig
           ref:
@@ -1464,8 +1518,6 @@ spec:
               value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
             - name: SNAPSHOT
               value: $(tasks.generate-snapshot.results.SNAPSHOT)
-#            - name: LLMISVC_CONTROLLER_IMAGE
-#              value: quay.io/opendatahub/llmisvc-controller:$(tasks.rhoai-init.results.mandatory-tag) #$(tasks.build-llmisvc-controller.results.IMAGE_REF)
             - name: SKLEARN_IMAGE
               value: quay.io/opendatahub/sklearn-serving-runtime:$(tasks.rhoai-init.results.mandatory-tag) #$(tasks.build-sklearn-serving-runtime.results.IMAGE_REF)
             - name: CUSTOM_TRANSFORMER_IMAGE
@@ -1477,11 +1529,13 @@ spec:
             - name: ERROR_404_ISVC_IMAGE
               value: quay.io/opendatahub/error-404-isvc:$(tasks.rhoai-init.results.mandatory-tag) #$(tasks.build-error-404-isvc.results.IMAGE_REF)
             - name: ARTIFACT_DIR
-              value: /workspace/artifact-dir
+              value: /workspace/artifacts-dir
           workingDir: /workspace/source
           volumeMounts:
             - name: credentials
               mountPath: /credentials
+            - name: test-status
+              mountPath: /test-status
           script: |
             set -euxo pipefail
             # apk add --no-cache bash make git curl \
@@ -1489,7 +1543,8 @@ spec:
             # && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
             # && rm kubectl && bash
             bash
-
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            echo "failed" > "$STATUS_FILE"
             COMPONENT_NAME=kserve-agent-ci
             export KSERVE_AGENT_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
@@ -1502,8 +1557,11 @@ spec:
             COMPONENT_NAME=kserve-storage-initializer-ci
             export STORAGE_INITIALIZER_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
-            ./test/scripts/openshift-ci/run-e2e-tests.sh "llminferenceservice and cluster_cpu" 2 "llm-d"
+            COMPONENT_NAME=odh-kserve-llmisvc-controller-ci
+            export LLMISVC_CONTROLLER_IMAGE=$(jq -r --arg component_name "${COMPONENT_NAME}" '.[$component_name].image' <<< "${SNAPSHOT}")
 
+            make e2e-llmisvc-ocp RUNNING_LOCAL=false
+            echo "success" > "$STATUS_FILE"
         - name: must-gather
           onError: continue
           image: quay.io/rhoai/rhoai-task-toolset:go-its
@@ -1528,6 +1586,7 @@ spec:
             oc adm must-gather --dest-dir "${DEST_DIR}"
 
         - name: git-push-artifacts
+          onError: continue
           ref:
             resolver: git
             params:
@@ -1550,7 +1609,18 @@ spec:
               value: 'test-artifacts/$(context.pipelineRun.name)'
             - name: pipelinerun-name
               value: $(context.pipelineRun.name)
-
+        - name: fail-if-needed
+          image: alpine
+          volumeMounts:
+            - name: test-status
+              mountPath: /test-status
+          script: |
+            STATUS_FILE="/test-status/deploy-and-e2e-status"
+            if ! [ -f "$STATUS_FILE" ] || [ "$(cat "$STATUS_FILE")" != "success" ]; then
+              echo "Failing pipeline because deploy-and-e2e step failed"
+              exit 1
+            fi
+            echo "deploy-and-e2e step succeeded"
 
   finally:
   - name: push-ci-artifacts-and-update-pr
@@ -1600,6 +1670,32 @@ spec:
               value: /workspace/odh-ci-artifacts
             - name: artifacts-dir-path
               value: 'test-artifacts/$(context.pipelineRun.name)'
+        - name: collect-tekton-logs
+          image: quay.io/konflux-ci/tekton-integration-catalog/utils:latest
+          env:
+            - name: PR_NAME
+              value: $(context.pipelineRun.name)
+            - name: PR_NAMESPACE
+              value: $(context.pipelineRun.namespace)
+          script: |
+            #!/bin/bash
+            set -euo pipefail
+
+            LOGS_DIR="/workspace/odh-ci-artifacts/test-artifacts/${PR_NAME}/tekton-logs"
+            mkdir -p "${LOGS_DIR}"
+
+            # Collect logs for each TaskRun using tkn, which preserves step
+            # execution order and prefixes each line with [step-name].
+            kubectl get pr "${PR_NAME}" -n "${PR_NAMESPACE}" -o json \
+              | jq -r '.status.childReferences[].name' \
+              | while read -r taskrun; do
+                  echo "Collecting logs for ${taskrun}"
+                  tkn taskrun logs "${taskrun}" -n "${PR_NAMESPACE}" --prefix \
+                    > "${LOGS_DIR}/${taskrun}.log" 2>&1 || true
+                done
+
+            echo "Collected $(ls "${LOGS_DIR}" 2>/dev/null | wc -l) task log files"
+            exit 0
         - name: secure-push-oci
           ref:
             resolver: git
