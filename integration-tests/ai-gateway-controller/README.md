@@ -28,3 +28,9 @@ Also mirrored here:
 ## Task image
 
 Uses `quay.io/rhoai/rhoai-task-toolset:maas` (same as models-as-a-service group test).
+
+## Artifacts
+
+The e2e step writes `$ARTIFACT_DIR/prow.log` (full prow script stdout/stderr) plus the
+EXIT-trap dumps from the prow runner (`auth-debug.log`, `cluster-state.log`, `phase-timings.txt`,
+etc.). Must-gather output lands under `$ARTIFACT_DIR/gather-openshift/`.
