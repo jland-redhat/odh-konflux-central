@@ -7,6 +7,11 @@ spec:
     Group integration test for ai-gateway-controller. Provisions an ephemeral Hypershift
     cluster and runs MaaS e2e tests (without external-model modules) using the PR-built
     odh-ai-gateway-controller-ci image.
+
+    TEMP (remove before merge): defaults PRAXIS_EXTPROC_IMAGE to
+    quay.io/opendatahub/odh-praxis-extproc:pr699-76cb977 (praxis-proxy/ai#699
+    llmisvc_model_provider_resolver @ 76cb977). Revert to odh-praxis-extproc-ci from
+    the group snapshot or odh-stable once that filter is on a published tag.
   params:
     - description: List of components in the group
       name: group-components
@@ -252,31 +257,28 @@ spec:
               echo "AI_GATEWAY_CONTROLLER_IMAGE=${AI_GATEWAY_CONTROLLER_IMAGE}"
               echo "AI_GATEWAY_CONTROLLER_IMAGE (tag): ${AI_GATEWAY_CONTROLLER_IMAGE%%@*}:${AIGC_TAG}"
 
+              # TODO(before-merge): drop PR699 override; use odh-praxis-extproc-ci snapshot or
+              # odh-stable once llmisvc_model_provider_resolver is on a published odh-praxis-extproc tag.
+              PRAXIS_EXTPROC_PR699_IMAGE="quay.io/opendatahub/odh-praxis-extproc:pr699-76cb977"
+              PRAXIS_FROM_SNAPSHOT=$(jq -r '."odh-praxis-extproc-ci".image // empty' <<< "${SNAPSHOT}")
+              if [ -n "${PRAXIS_FROM_SNAPSHOT}" ] && [ "${PRAXIS_FROM_SNAPSHOT}" != "null" ]; then
+                export PRAXIS_EXTPROC_IMAGE="${PRAXIS_FROM_SNAPSHOT}"
+              else
+                export PRAXIS_EXTPROC_IMAGE="${PRAXIS_EXTPROC_IMAGE:-${PRAXIS_EXTPROC_PR699_IMAGE}}"
+                echo "NOTE: odh-praxis-extproc-ci not in SNAPSHOT; using PRAXIS_EXTPROC_IMAGE=${PRAXIS_EXTPROC_IMAGE} (praxis-proxy/ai#699 @ 76cb977)"
+              fi
+
               export MAAS_API_IMAGE="${MAAS_API_IMAGE:-quay.io/opendatahub/maas-api:latest}"
               export MAAS_CONTROLLER_IMAGE="${MAAS_CONTROLLER_IMAGE:-quay.io/opendatahub/maas-controller:latest}"
               echo "MAAS_API_IMAGE=${MAAS_API_IMAGE}"
               echo "MAAS_CONTROLLER_IMAGE=${MAAS_CONTROLLER_IMAGE}"
+              echo "PRAXIS_EXTPROC_IMAGE=${PRAXIS_EXTPROC_IMAGE}"
 
               mkdir -p "${ARTIFACT_DIR}"
               ./test/e2e/scripts/prow_run_ai_gateway_controller_test.sh \
                 2>&1 | tee "${ARTIFACT_DIR}/prow.log"
 
               echo "success" > "$STATUS_FILE"
-          - name: must-gather
-            onError: continue
-            image: quay.io/rhoai/rhoai-task-toolset:maas
-            env:
-              - name: KUBECONFIG
-                value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
-              - name: ARTIFACT_DIR
-                value: /workspace/artifacts-dir
-            workingDir: /workspace/source
-            volumeMounts:
-              - name: credentials
-                mountPath: /credentials
-            script: |
-              mkdir -p "${ARTIFACT_DIR}/gather-openshift"
-              oc adm must-gather --dest-dir "${ARTIFACT_DIR}/gather-openshift"
           - name: git-push-artifacts
             onError: continue
             ref:
