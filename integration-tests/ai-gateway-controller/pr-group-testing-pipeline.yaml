@@ -180,6 +180,7 @@ spec:
         workspace: git-auth
       runAfter:
         - provision-cluster
+        - audit-snapshot
       taskSpec:
         volumes:
           - name: credentials
@@ -233,6 +234,12 @@ spec:
                 value: /workspace/artifacts-dir
               - name: SNAPSHOT
                 value: $(tasks.generate-snapshot.results.SNAPSHOT)
+              - name: PR_NUMBER
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['pipelinesascode.tekton.dev/pull-request']
+              - name: PR_NUMBER_RESULT
+                value: $(tasks.audit-snapshot.results.pull-request-number)
             workingDir: /workspace/source
             volumeMounts:
               - name: credentials
@@ -245,16 +252,38 @@ spec:
               STATUS_FILE="/test-status/deploy-and-e2e-status"
               echo "failed" > "$STATUS_FILE"
 
-              export AI_GATEWAY_CONTROLLER_IMAGE=$(jq -r '."odh-ai-gateway-controller-ci".image' <<< "${SNAPSHOT}")
-              AIGC_TAG=$(jq -r '."odh-ai-gateway-controller-ci".image_tag' <<< "${SNAPSHOT}")
+              PR_NUMBER="${PR_NUMBER:-${PR_NUMBER_RESULT:-}}"
 
-              if [ -z "${AIGC_TAG}" ] || [ "${AIGC_TAG}" = "null" ]; then
-                echo "ERROR: image_tag missing for odh-ai-gateway-controller-ci in SNAPSHOT" >&2
+              AIGC_DIGEST_REF=$(jq -r '."odh-ai-gateway-controller-ci".image' <<< "${SNAPSHOT}")
+              AIGC_TAG=$(jq -r '."odh-ai-gateway-controller-ci".image_tag' <<< "${SNAPSHOT}")
+              AIGC_REPO="${AIGC_DIGEST_REF%%@*}"
+
+              if [ -z "${AIGC_REPO}" ] || [ "${AIGC_REPO}" = "null" ]; then
+                echo "ERROR: image missing for odh-ai-gateway-controller-ci in SNAPSHOT" >&2
                 exit 1
               fi
 
+              # Always the floating quay tag (odh-pr-37, ...). The snapshot .image
+              # digest lags that tag; deploying it rolls out a stale controller.
+              if [ -n "${PR_NUMBER}" ] && [ "${PR_NUMBER}" != "null" ]; then
+                export AI_GATEWAY_CONTROLLER_IMAGE="${AIGC_REPO}:odh-pr-${PR_NUMBER}"
+              elif [ -n "${AIGC_TAG}" ] && [ "${AIGC_TAG}" != "null" ] && [[ "${AIGC_TAG}" != *@sha256:* ]]; then
+                export AI_GATEWAY_CONTROLLER_IMAGE="${AIGC_REPO}:${AIGC_TAG}"
+              else
+                echo "ERROR: cannot resolve odh-pr tag (PR_NUMBER=${PR_NUMBER:-} image_tag=${AIGC_TAG:-})" >&2
+                echo "ERROR: refusing snapshot digest ${AIGC_DIGEST_REF}" >&2
+                exit 1
+              fi
+              case "${AI_GATEWAY_CONTROLLER_IMAGE}" in
+                *@sha256:*)
+                  echo "ERROR: refusing digest image ${AI_GATEWAY_CONTROLLER_IMAGE}" >&2
+                  exit 1
+                  ;;
+              esac
+
               echo "AI_GATEWAY_CONTROLLER_IMAGE=${AI_GATEWAY_CONTROLLER_IMAGE}"
-              echo "AI_GATEWAY_CONTROLLER_IMAGE (tag): ${AI_GATEWAY_CONTROLLER_IMAGE%%@*}:${AIGC_TAG}"
+              echo "AI_GATEWAY_CONTROLLER_IMAGE (snapshot digest, unused): ${AIGC_DIGEST_REF}"
+              echo "AI_GATEWAY_CONTROLLER_IMAGE (snapshot tag): ${AIGC_REPO}:${AIGC_TAG}"
 
               PRAXIS_EXTPROC_STABLE_IMAGE="quay.io/opendatahub/odh-praxis-extproc:odh-stable"
               PRAXIS_FROM_SNAPSHOT=$(jq -r '."odh-praxis-extproc-ci".image // empty' <<< "${SNAPSHOT}")
@@ -276,6 +305,35 @@ spec:
                 2>&1 | tee "${ARTIFACT_DIR}/prow.log"
 
               echo "success" > "$STATUS_FILE"
+          - name: collect-maas-artifacts
+            onError: continue
+            image: quay.io/rhoai/rhoai-task-toolset:maas
+            env:
+              - name: KUBECONFIG
+                value: "/credentials/$(steps.get-kubeconfig.results.kubeconfig)"
+              - name: ARTIFACT_DIR
+                value: /workspace/artifacts-dir
+              - name: DEPLOYMENT_NAMESPACE
+                value: opendatahub
+              - name: MAAS_SUBSCRIPTION_NAMESPACE
+                value: models-as-a-service
+              - name: GATEWAY_NAMESPACE
+                value: openshift-ingress
+              - name: AUTHORINO_NAMESPACE
+                value: kuadrant-system
+              - name: LLM_NAMESPACE
+                value: llm
+              - name: ISTIO_NAMESPACE
+                value: istio-system
+            workingDir: /workspace/source
+            volumeMounts:
+              - name: credentials
+                mountPath: /credentials
+            script: |
+              set -euo pipefail
+              # Same collector as maas-billing test/e2e/scripts/auth_utils.sh
+              # collect_e2e_artifacts (maas-crs/, cluster-state.log, pod-logs/).
+              bash ./test/e2e/scripts/collect-e2e-artifacts.sh
           - name: must-gather
             onError: continue
             image: quay.io/rhoai/rhoai-task-toolset:maas
