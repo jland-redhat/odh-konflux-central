@@ -1,20 +1,22 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
+#
 metadata:
   annotations:
-    build.appstudio.openshift.io/repo: https://github.com/opendatahub-io/llm-d-latency-predictor?rev={{revision}}
+    build.appstudio.openshift.io/repo: https://github.com/opendatahub-io/openshell?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "$$TARGET_BRANCH$$"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "push"
+      && target_branch.matches("^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+-rhaiv\\.[0-9]+$")
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: opendatahub-builds
-    appstudio.openshift.io/component: odh-latency-predictor-prediction-ci
+    appstudio.openshift.io/component: odh-openshell-sandbox-ci
     pipelines.appstudio.openshift.io/type: build
-  name: odh-latency-predictor-prediction-on-pull-request
+  name: odh-openshell-sandbox-on-tag
   namespace: open-data-hub-tenant
 spec:
   params:
@@ -23,17 +25,27 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/opendatahub/odh-latency-predictor-prediction:$$OUTPUT_IMAGE_TAG$$
+    value: quay.io/opendatahub/odh-openshell-sandbox:{{git_tag}}
   - name: dockerfile
-    value: Dockerfile.konflux.prediction
+    value: deploy/docker/Dockerfile.konflux.sandbox
   - name: path-context
     value: .
-  # additional params
-  - name: additional-tags
+  - name: hermetic
+    value: "true"
+  - name: build-platforms
     value:
-    - 'odh-pr-{{revision}}'
-  - name: pipeline-type
-    value: pull-request
+    - linux/x86_64
+    - linux/arm64
+  - name: prefetch-input
+    value: |
+      [
+        {"type": "cargo", "path": "."},
+        {"type": "rpm", "path": "deploy/konflux/sandbox"},
+        {"type": "generic", "path": "deploy/konflux/sandbox", "lockfile": "generic-fetcher.yaml"}
+      ]
+  - name: build-args
+    value:
+    - "OPENSHELL_VERSION={{git_tag}}"
   pipelineRef:
     resolver: git
     params:
@@ -44,7 +56,7 @@ spec:
     - name: pathInRepo
       value: pipeline/multi-arch-container-build.yaml
   taskRunTemplate:
-    serviceAccountName: build-pipeline-odh-latency-predictor-prediction-ci
+    serviceAccountName: build-pipeline-odh-openshell-sandbox-ci
   workspaces:
   - name: git-auth
     secret:

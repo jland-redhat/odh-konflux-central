@@ -112,12 +112,8 @@
   "llm-d-batch-gateway-operator": {
     "odh-batch-gateway-operator-ci": "opendatahub/odh-batch-gateway-operator"
   },
-  "llm-d-latency-predictor": {
-    "odh-latency-predictor-prediction-ci": "opendatahub/odh-latency-predictor-prediction",
-    "odh-latency-predictor-test-ci": "opendatahub/odh-latency-predictor-test",
-    "odh-latency-predictor-training-ci": "opendatahub/odh-latency-predictor-training"
-  },
   "llm-d-router": {
+    "odh-llm-d-coordinator-ci": "opendatahub/odh-llm-d-coordinator",
     "odh-llm-d-router-disagg-sidecar-ci": "opendatahub/odh-llm-d-router-disagg-sidecar",
     "odh-llm-d-router-endpoint-picker-ci": "opendatahub/odh-llm-d-router-endpoint-picker"
   },
@@ -184,6 +180,7 @@
     "odh-mod-arch-agent-ops-ci": "opendatahub/odh-mod-arch-agent-ops",
     "odh-mod-arch-automl-ci": "opendatahub/odh-mod-arch-automl",
     "odh-mod-arch-autorag-ci": "opendatahub/odh-mod-arch-autorag",
+    "odh-mod-arch-data-connect-hub-ci": "opendatahub/odh-mod-arch-data-connect-hub",
     "odh-mod-arch-data-registry-ci": "opendatahub/odh-mod-arch-data-registry",
     "odh-mod-arch-eval-hub": "opendatahub/odh-mod-arch-eval-hub",
     "odh-mod-arch-gen-ai-ci": "opendatahub/odh-mod-arch-gen-ai",
@@ -214,6 +211,7 @@
   "openshell": {
     "odh-openshell-cli-ci": "opendatahub/odh-openshell-cli",
     "odh-openshell-gateway-ci": "opendatahub/odh-openshell-gateway",
+    "odh-openshell-sandbox-ci": "opendatahub/odh-openshell-sandbox",
     "odh-openshell-supervisor-ci": "opendatahub/odh-openshell-supervisor"
   },
   "openvino_model_server": {
@@ -222,7 +220,11 @@
   "pipelines-components": {
     "odh-automl-ci": "opendatahub/odh-automl",
     "odh-autorag-ci": "opendatahub/odh-autorag",
+    "odh-autorag-inference-ci": "opendatahub/odh-autorag-inference",
     "odh-pipelines-components-ci": "opendatahub/odh-pipelines-components"
+  },
+  "praxis-ai-grid-operator": {
+    "odh-praxis-ai-grid-operator-ci": "opendatahub/odh-praxis-ai-grid-operator"
   },
   "praxis-extproc": {
     "odh-praxis-extproc-ci": "opendatahub/odh-praxis-extproc"

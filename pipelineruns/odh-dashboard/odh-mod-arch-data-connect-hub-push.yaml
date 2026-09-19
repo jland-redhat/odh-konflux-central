@@ -3,19 +3,20 @@ kind: PipelineRun
 #
 metadata:
   annotations:
-    build.appstudio.openshift.io/repo: https://github.com/opendatahub-io/ai-gateway-operator?rev={{revision}}
+    build.appstudio.openshift.io/repo: https://github.com/opendatahub-io/odh-dashboard?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "$$TARGET_BRANCH$$"
+      == "$$TARGET_BRANCH$$" && ( "packages/data-connect-hub/**".pathChanged()
+            || ".tekton/odh-mod-arch-data-connect-hub-push.yaml".pathChanged() )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: opendatahub-builds
-    appstudio.openshift.io/component: odh-ai-gateway-operator-ci
+    appstudio.openshift.io/component: odh-mod-arch-data-connect-hub-ci
     pipelines.appstudio.openshift.io/type: build
-  name: odh-ai-gateway-operator-on-push
+  name: odh-mod-arch-data-connect-hub-on-push
   namespace: open-data-hub-tenant
 spec:
   params:
@@ -24,11 +25,11 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/opendatahub/odh-ai-gateway-operator:$$OUTPUT_IMAGE_TAG$$
+    value: quay.io/opendatahub/odh-mod-arch-data-connect-hub:$$OUTPUT_IMAGE_TAG$$
   - name: dockerfile
-    value: Dockerfile.konflux
+    value: packages/data-connect-hub/Dockerfile.workspace
   - name: path-context
-    value: ./
+    value: .
   pipelineRef:
     resolver: git
     params:
@@ -39,7 +40,7 @@ spec:
     - name: pathInRepo
       value: pipeline/multi-arch-container-build.yaml
   taskRunTemplate:
-    serviceAccountName: build-pipeline-odh-ai-gateway-operator-ci
+    serviceAccountName: build-pipeline-odh-mod-arch-data-connect-hub-ci
   workspaces:
   - name: git-auth
     secret:
