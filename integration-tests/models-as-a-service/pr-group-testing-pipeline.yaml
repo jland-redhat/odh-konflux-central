@@ -295,12 +295,12 @@ spec:
               # tenants, kuadrant TRLPs/RLPs, inference ExternalModel/Provider, etc.)
               DEST_DIR="${ARTIFACT_DIR}/gather-aigateway"
               mkdir -p "${DEST_DIR}"
-              oc adm must-gather --image=quay.io/rhoai/odh-must-gather-rhel9:rhoai-3.6 --dest-dir "${DEST_DIR}" -- "export COMPONENT=aigateway; /usr/bin/gather"
+              oc adm must-gather --image=registry.redhat.io/rhoai/odh-must-gather-rhel9:v3.6.0 --dest-dir "${DEST_DIR}" -- "export COMPONENT=aigateway; /usr/bin/gather"
 
               # kserve-must-gather (LLMInferenceService / llmisvc and related serving CRs)
               DEST_DIR="${ARTIFACT_DIR}/gather-kserve"
               mkdir -p "${DEST_DIR}"
-              oc adm must-gather --image=quay.io/rhoai/odh-must-gather-rhel9:rhoai-3.6 --dest-dir "${DEST_DIR}" -- "export COMPONENT=kserve; /usr/bin/gather"
+              oc adm must-gather --image=registry.redhat.io/rhoai/odh-must-gather-rhel9:v3.6.0 --dest-dir "${DEST_DIR}" -- "export COMPONENT=kserve; /usr/bin/gather"
 
               # openshift-must-gather
               DEST_DIR="${ARTIFACT_DIR}/gather-openshift"
