@@ -311,17 +311,24 @@ spec:
               RHOAI_MUST_GATHER_IMAGE="registry.redhat.io/rhoai/odh-must-gather-rhel9:${RHOAI_MUST_GATHER_TAG}"
               echo "RHOAI_MUST_GATHER_IMAGE=${RHOAI_MUST_GATHER_IMAGE}"
 
+              # Group-test installs ODH (opendatahub-operator in openshift-operators), not
+              # rhods-operator. Without OPERATOR_NAMESPACE, must-gather's gather script
+              # probes for a rhods-operator Subscription, prints
+              # "rhods-operator not detected. Skipping.", and exits 0 with empty caches.
+              # Setting these env vars skips that probe (must-gather image unchanged).
+              MG_ODH_ENV="export OPERATOR_NAMESPACE=openshift-operators; export APPLICATIONS_NAMESPACE=opendatahub; export MONITORING_NAMESPACE=opendatahub; export NOTEBOOK_NAMESPACE=opendatahub"
+
               # aigateway-must-gather (includes MaaS CRs on OCP: aitenants, configs,
               # maasauthpolicies, maasmodelrefs, maassubscriptions, maastenantconfigs,
               # tenants, kuadrant TRLPs/RLPs, inference ExternalModel/Provider, etc.)
               DEST_DIR="${ARTIFACT_DIR}/gather-aigateway"
               mkdir -p "${DEST_DIR}"
-              oc adm must-gather --image="${RHOAI_MUST_GATHER_IMAGE}" --dest-dir "${DEST_DIR}" -- "export COMPONENT=aigateway; /usr/bin/gather"
+              oc adm must-gather --image="${RHOAI_MUST_GATHER_IMAGE}" --dest-dir "${DEST_DIR}" -- "${MG_ODH_ENV}; export COMPONENT=aigateway; /usr/bin/gather"
 
               # kserve-must-gather (LLMInferenceService / llmisvc and related serving CRs)
               DEST_DIR="${ARTIFACT_DIR}/gather-kserve"
               mkdir -p "${DEST_DIR}"
-              oc adm must-gather --image="${RHOAI_MUST_GATHER_IMAGE}" --dest-dir "${DEST_DIR}" -- "export COMPONENT=kserve; /usr/bin/gather"
+              oc adm must-gather --image="${RHOAI_MUST_GATHER_IMAGE}" --dest-dir "${DEST_DIR}" -- "${MG_ODH_ENV}; export COMPONENT=kserve; /usr/bin/gather"
 
               # openshift-must-gather
               DEST_DIR="${ARTIFACT_DIR}/gather-openshift"
