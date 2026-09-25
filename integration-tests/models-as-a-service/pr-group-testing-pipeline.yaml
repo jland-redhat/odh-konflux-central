@@ -290,8 +290,22 @@ spec:
               - name: credentials
                 mountPath: /credentials
             script: |
-              mkdir -p "${ARTIFACT_DIR}/gather-openshift"
-              oc adm must-gather --dest-dir "${ARTIFACT_DIR}/gather-openshift"
+              # aigateway-must-gather (includes MaaS CRs on OCP: aitenants, configs,
+              # maasauthpolicies, maasmodelrefs, maassubscriptions, maastenantconfigs,
+              # tenants, kuadrant TRLPs/RLPs, inference ExternalModel/Provider, etc.)
+              DEST_DIR="${ARTIFACT_DIR}/gather-aigateway"
+              mkdir -p "${DEST_DIR}"
+              oc adm must-gather --image=quay.io/modh/must-gather:rhoai-2.24 --dest-dir "${DEST_DIR}" -- "export COMPONENT=aigateway; /usr/bin/gather"
+
+              # kserve-must-gather (LLMInferenceService / llmisvc and related serving CRs)
+              DEST_DIR="${ARTIFACT_DIR}/gather-kserve"
+              mkdir -p "${DEST_DIR}"
+              oc adm must-gather --image=quay.io/modh/must-gather:rhoai-2.24 --dest-dir "${DEST_DIR}" -- "export COMPONENT=kserve; /usr/bin/gather"
+
+              # openshift-must-gather
+              DEST_DIR="${ARTIFACT_DIR}/gather-openshift"
+              mkdir -p "${DEST_DIR}"
+              oc adm must-gather --dest-dir "${DEST_DIR}"
           - name: git-push-artifacts
             onError: continue
             ref:
